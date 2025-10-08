@@ -66,12 +66,52 @@
     </div>
   </section>
 
-  <!-- Live NASDAQ (TradingView) -->
+  <!-- Live S&P 500 (TradingView) -->
   <section class="mx-auto max-w-7xl px-6 py-10">
     <div class="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl p-4">
-      <div class="flex items-center gap-2 text-xl font-semibold mb-1">📊 NASDAQ Composite — Live</div>
+      <div class="flex items-center gap-2 text-xl font-semibold mb-1">📊 S&P 500 — Live</div>
       <p class="text-white/60 mb-3">Powered by TradingView widget. Interactive, real data.</p>
-      <div id="nasdaqWidget" class="h-[420px] w-full"></div>
+      <div id="spxWidget" class="h-[420px] w-full"></div>
+    </div>
+  </section>
+
+  <!-- Live Feeds: Twitter + Reddit -->
+  <section class="mx-auto max-w-7xl px-6 py-8 grid gap-6 md:grid-cols-3">
+    <!-- Twitter timeline + profile actions -->
+    <div class="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl p-4 md:col-span-1">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-lg font-semibold">🌀 Breaking Momentum: Tweets That Move Markets (Or At Least Our Moods)</h3>
+        <!-- Follow button widget -->
+        <a href="https://twitter.com/DeItaone" class="twitter-follow-button" data-size="large" data-show-count="true">Follow @DeItaone</a>
+      </div>
+      <!-- Mention button widget -->
+      <div class="mb-3">
+        <a href="https://twitter.com/intent/tweet?screen_name=DeItaone" class="twitter-mention-button" data-size="large">Tweet to @DeItaone</a>
+      </div>
+      <!-- Featured Tweet -->
+      <div class="mb-4">
+        <p class="text-sm text-white/60 mb-2">Featured Tweet</p>
+        <blockquote class="twitter-tweet">
+          <p lang="en" dir="ltr">*NVIDIA IS AMONG EQUITY INVESTORS IN MUSK&#39;S XAI CHIP DEAL<br><br>*MUSK’S XAI NEARS $20 BILLION CAPITAL RAISE TIED TO NVIDIA CHIPS</p>
+          — *Walter Bloomberg (@DeItaone) <a href="https://twitter.com/DeItaone/status/1975701954182386148?ref_src=twsrc%5Etfw">October 7, 2025</a>
+        </blockquote>
+      </div>
+
+      <!-- Latest Tweet (auto-refresh daily) -->
+      <div class="mb-4">
+        <p class="text-sm text-white/60 mb-2">Latest from @DeItaone</p>
+        <div id="latestTweet" class="rounded-xl overflow-hidden"></div>
+      </div>
+      <!-- Timeline widget -->
+      <a class="twitter-timeline" data-theme="dark" data-height="360" href="https://twitter.com/DeItaone?ref_src=twsrc%5Etfw">Tweets by @DeItaone</a>
+      <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+    </div>
+
+    <!-- Reddit cards via JSON API (no iframe) -->
+    <div class="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl p-4 md:col-span-2">
+      <h3 class="text-lg font-semibold mb-2">💥 r/wallstreetbets — The Momentum Oracle (Sometimes Drunk, Always Loud)</h3>
+      <div id="redditGrid" class="grid gap-4 sm:grid-cols-2"></div>
+      <p id="redditError" class="hidden mt-2 text-sm text-rose-300">Couldn’t load Reddit posts right now.</p>
     </div>
   </section>
 
@@ -258,6 +298,97 @@
     fetchFmpQuotes();
     setInterval(fetchFmpQuotes, 10000);
 
+    // === Reddit JSON widgets (no iframes) ===
+    const REDDIT_POSTS = [
+      'https://www.reddit.com/r/wallstreetbets/comments/1nqjmwv/750k_in_nbis_nezuko_body_pillow_formation_150_pt/',
+      'https://www.reddit.com/r/wallstreetbets/comments/1kmaqin/opendoor_is_the_next_carvana/',
+      'https://www.reddit.com/r/wallstreetbets/comments/1m6eifr/my_biggest_gain_ever_sold_duh/',
+      'https://www.reddit.com/r/wallstreetbets/comments/1m8hge6/finally_broke_even_400k_50k_500k/',
+    ];
+
+    function redditJsonUrl(permalink) {
+      // ensure trailing slash and add .json
+      const u = permalink.endsWith('/') ? permalink : permalink + '/';
+      return u + '.json';
+    }
+
+    function formatNumber(n){
+      if (n >= 1e6) return (n/1e6).toFixed(1)+'M';
+      if (n >= 1e3) return (n/1e3).toFixed(1)+'k';
+      return String(n);
+    }
+
+    async function fetchRedditPosts() {
+      const grid = document.getElementById('redditGrid');
+      const err = document.getElementById('redditError');
+      grid.innerHTML = '';
+      err.classList.add('hidden');
+
+      try {
+        const promises = REDDIT_POSTS.map(async (url) => {
+          const res = await fetch(redditJsonUrl(url), { cache: 'no-store' });
+          const data = await res.json();
+          const post = data?.[0]?.data?.children?.[0]?.data;
+          if (!post) throw new Error('No post data');
+          const title = post.title || 'Reddit Post';
+          const score = post.score ?? 0;
+          const comments = post.num_comments ?? 0;
+          const author = post.author ? 'u/'+post.author : 'reddit';
+          const dest = 'https://www.reddit.com' + (post.permalink || '');
+          const thumb = (post.thumbnail && post.thumbnail.startsWith('http')) ? post.thumbnail : null;
+
+          const card = document.createElement('a');
+          card.href = dest; card.target = '_blank'; card.rel = 'noopener';
+          card.className = 'rounded-xl border border-white/10 bg-black/30 p-4 hover:bg-white/5 transition block';
+          card.innerHTML = `
+            <div class="flex items-start gap-3">
+              ${thumb ? `<img src="${thumb}" alt="thumb" class="h-14 w-14 rounded-md object-cover">` : `<div class="h-14 w-14 rounded-md bg-white/10 grid place-items-center">🧾</div>`}
+              <div class="flex-1">
+                <h4 class="font-semibold mb-1 text-fuchsia-300">${title}</h4>
+                <p class="text-xs text-white/60">${author} • <span title="upvotes">▲ ${formatNumber(score)}</span> • <span title="comments">💬 ${formatNumber(comments)}</span></p>
+              </div>
+            </div>`;
+          grid.appendChild(card);
+        });
+        await Promise.all(promises);
+      } catch (e) {
+        console.error('Reddit load error', e);
+        err.classList.remove('hidden');
+      }
+    }
+
+    // Load now and refresh every 5 minutes
+    fetchRedditPosts();
+    setInterval(fetchRedditPosts, 5 * 60 * 1000);
+
+    // === Twitter latest-tweet widget (auto-refresh daily) ===
+    function renderLatestTweet(){
+      const host = document.getElementById('latestTweet');
+      if (!host) return;
+      // Clear and inject a standard anchor-based timeline (more reliable than createTimeline in some embeds)
+      host.innerHTML = '';
+      const a = document.createElement('a');
+      a.setAttribute('class','twitter-timeline');
+      a.setAttribute('data-theme','dark');
+      a.setAttribute('data-tweet-limit','1');
+      a.setAttribute('data-chrome','noheader nofooter noborders transparent');
+      a.setAttribute('href','https://twitter.com/DeItaone');
+      a.textContent = 'Latest from @DeItaone';
+      host.appendChild(a);
+      // If widgets.js is ready, (re)parse only inside host; else retry shortly
+      const loadWidgets = () => {
+        if (window.twttr && window.twttr.widgets && typeof window.twttr.widgets.load === 'function') {
+          window.twttr.widgets.load(host);
+        } else {
+          setTimeout(loadWidgets, 800);
+        }
+      };
+      loadWidgets();
+    }
+    renderLatestTweet();
+    // Refresh once per day
+    setInterval(renderLatestTweet, 24 * 60 * 60 * 1000);
+
     // --- Basic console tests (non-intrusive) ---
     (function runMomoTests(){
       try {
@@ -276,8 +407,8 @@
     // TradingView NASDAQ widget
     if (window.TradingView) {
       new TradingView.widget({
-        container_id: 'nasdaqWidget',
-        symbol: 'NASDAQ:IXIC',
+        container_id: 'spxWidget',
+        symbol: 'SP:SPX',
         interval: '1',
         timezone: 'America/New_York',
         theme: 'dark',
